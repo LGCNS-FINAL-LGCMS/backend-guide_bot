@@ -1,4 +1,8 @@
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
@@ -25,22 +29,25 @@ LMS_SERVICE_NAME = "lgcms"  # config 파일에 써도 됨
 
 async def get_answer_from_mongodb(mongo_id: str):
     """MongoDB에서 _id를 사용하여 원본 답변을 가져오는 비동기 함수"""
-    mongo_collection = await get_mongo_collection()  # 비동기로 컬렉션 가져오기
+    # 이제 get_mongo_collection()은 이미 초기화된 인스턴스를 반환해야 합니다.
+    # 따라서 매번 await 할 필요 없이, 한 번만 가져오거나 전역 변수를 사용합니다.
+    # 예시:
+    _mongo_collection = get_mongo_collection()  # 동기 함수로 변경되거나, 이미 초기화된 전역 변수를 사용
 
-    # 변경된 부분: None과 명시적으로 비교
-    if mongo_collection is None:
-        print("[ERROR] MongoDB collection is not initialized.")
+    if _mongo_collection is None:
+        logger.error("MongoDB collection is not initialized.")
         return "죄송합니다, 답변을 가져올 수 없습니다. 데이터베이스 연결 문제일 수 있습니다."
+
     try:
         object_id = ObjectId(mongo_id)
         document = await mongo_collection.find_one({"_id": object_id})
         if document and "original_answer" in document:
             return document["original_answer"]
         else:
-            print(f"[WARN] No original_answer found for mongo_id: {mongo_id}")
+            logger.warning(f"No original_answer found for mongo_id: {mongo_id}")
             return "죄송합니다, 해당 질문에 대한 원본 답변을 찾을 수 없습니다."
     except Exception as e:
-        print(f"[ERROR] Failed to fetch answer from MongoDB for ID {mongo_id}: {e}")
+        logger.error(f"[ERROR] Failed to fetch answer from MongoDB for ID {mongo_id}: {e}")
         return f"죄송합니다, 답변 조회 중 오류가 발생했습니다: {e}"
 
 

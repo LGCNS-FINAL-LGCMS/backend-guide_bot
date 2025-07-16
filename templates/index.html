@@ -1,149 +1,283 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>AWS Bedrock 챗봇</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMS 챗봇</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f4f7f6; color: #333; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container { width: 100%; max-width: 800px; height: 90vh; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        h1 { text-align: center; color: #0056b3; margin-top: 0; }
-        #messages { border: 1px solid #ddd; padding: 15px; flex-grow: 1; overflow-y: auto; margin-bottom: 15px; background-color: #e9ecef; border-radius: 8px; }
-        .message { margin-bottom: 12px; line-height: 1.6; }
-        .message-user { text-align: right; }
-        .message-user .content { background-color: #007bff; color: white; padding: 10px 15px; border-radius: 18px 18px 5px 18px; display: inline-block; max-width: 80%; }
-        .message-bot { text-align: left; }
-        .message-bot .content { background-color: #f8f9fa; border: 1px solid #dee2e6; color: #212529; padding: 10px 15px; border-radius: 18px 18px 18px 5px; display: inline-block; max-width: 80%; text-align: left; }
-        /* 마크다운 렌더링을 위한 추가 스타일 */
-        .message-bot .content p { margin: 0 0 8px 0; } /* 단락 간격 */
-        .message-bot .content strong { font-weight: bold; } /* 굵은 글씨 */
-        .message-bot .content ul, .message-bot .content ol { margin: 8px 0 8px 20px; padding: 0; } /* 목록 들여쓰기 */
-        .message-bot .content li { margin-bottom: 4px; } /* 목록 항목 간격 */
-        .message-bot .content h1, .message-bot .content h2, .message-bot .content h3, .message-bot .content h4, .message-bot .content h5, .message-bot .content h6 { margin-top: 1em; margin-bottom: 0.5em; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh; /* 화면 높이의 90% */
+            max-height: 800px; /* 최대 높이 설정 */
+        }
+        .chat-header {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: white;
+            padding: 1rem 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background-color: #eef2f6; /* Gray 100 */
+        }
+        .message-bubble {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .user-message {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #ffffff;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-input-area {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e2e8f0; /* Gray 200 */
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .chat-input {
+            flex-grow: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #cbd5e1; /* Gray 300 */
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .chat-input:focus {
+            border-color: #4f46e5; /* Indigo 600 */
+        }
+        .send-button {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .send-button:hover {
+            background-color: #4338ca; /* Indigo 700 */
+        }
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #64748b; /* Slate 500 */
+            font-style: italic;
+            margin-top: 0.5rem;
+        }
+        .dot-pulse {
+            width: 10px;
+            height: 10px;
+            background-color: #64748b;
+            border-radius: 50%;
+            animation: dot-pulse 1s infinite ease-in-out;
+        }
+        .dot-pulse:nth-child(2) { animation-delay: 0.2s; }
+        .dot-pulse:nth-child(3) { animation-delay: 0.4s; }
 
-
-        .input-area { display: flex; }
-        input[type="text"] { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; margin-right: 10px; font-size: 16px; }
-        input[type="text"]:focus { outline: none; border-color: #007bff; box-shadow: 0 0 5px rgba(0,123,255,0.5); }
-        button { padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; transition: background-color 0.2s; }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        @keyframes dot-pulse {
+            0%, 100% { transform: scale(0); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>AWS Bedrock 실시간 챗봇</h1>
-        <div id="messages"></div>
-        <div class="input-area">
-            <input type="text" id="messageInput" placeholder="메시지를 입력하세요..." onkeyup="if(event.keyCode === 13) sendMessage()">
-            <button id="sendButton" onclick="sendMessage()">보내기</button>
+    <div class="chat-container">
+        <div class="chat-header">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2h2a1 1 0 000-2H9zm0 4a1 1 0 000 2h2a1 1 0 000-2H9z" clip-rule="evenodd"></path>
+            </svg>
+            LMS 가이드 챗봇
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message-bubble bot-message">안녕하세요! LMS 가이드 챗봇입니다. 무엇을 도와드릴까요?</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="messageInput" class="chat-input" placeholder="질문을 입력하세요..." autocomplete="off">
+            <button id="sendButton" class="send-button">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.169.409l5 1.429a1 1 0 001.169-1.409l-7-14z"></path>
+                </svg>
+                전송
+            </button>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-
     <script>
-        const messageInput = document.getElementById("messageInput");
-        const sendButton = document.getElementById("sendButton");
-        const messagesDiv = document.getElementById("messages");
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        let ws;
+        let botMessageElement = null; // 현재 봇 메시지 버블을 추적
+        let isStreaming = false; // 스트리밍 중인지 여부
 
-        // 웹소켓 URL은 현재 웹페이지의 프로토콜과 호스트를 사용합니다.
-        const ws_protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws_url = ws_protocol + '//' + window.location.host + '/ws';
-        const ws = new WebSocket(ws_url);
+        function connectWebSocket() {
+            // 웹소켓 URL은 현재 페이지의 호스트를 사용합니다.
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = `${protocol}//${window.location.host}/ws`;
+            ws = new WebSocket(url);
 
-        let lastBotMessageElement = null; // 현재 스트리밍되는 봇 메시지의 DOM 요소
-        let currentBotRawMessage = ""; // 현재 스트리밍되는 봇 메시지의 원시(raw) 텍스트
+            ws.onopen = (event) => {
+                console.log('WebSocket connected:', event);
+                // 연결 성공 시 메시지 표시
+                appendMessage('system', '챗봇과 연결되었습니다.', 'system-message');
+            };
 
-        ws.onopen = function(event) {
-            console.log("WebSocket 연결 성공");
-        };
+            ws.onmessage = (event) => {
+                const message = event.data;
+                if (message === "__END_OF_STREAM__") {
+                    // 스트림 종료 신호
+                    console.log("End of stream received.");
+                    isStreaming = false;
+                    removeLoadingIndicator();
+                    // 메시지 입력 활성화
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    messageInput.focus();
+                    // 스크롤을 맨 아래로
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                } else {
+                    // 스트리밍 중인 메시지
+                    if (!botMessageElement || botMessageElement.dataset.complete === 'true') {
+                        // 새로운 봇 메시지 시작
+                        botMessageElement = appendMessage('bot', '', 'bot-message');
+                        botMessageElement.dataset.complete = 'false';
+                        addLoadingIndicator();
+                    }
+                    // 현재 봇 메시지 버블에 텍스트 추가
+                    botMessageElement.textContent += message;
+                    // 스크롤을 맨 아래로 (새로운 텍스트가 추가될 때마다)
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            };
 
-        ws.onmessage = function(event) {
-            // 백엔드에서 보낸 스트림 종료 신호인지 확인
-            if (event.data === "__END_OF_STREAM__") {
-                // 스트림이 완전히 끝나면 최종 렌더링은 이미 완료된 상태
-                enableChat(); // 채팅 UI 활성화
-                lastBotMessageElement = null; // 다음 메시지를 위해 초기화
-                currentBotRawMessage = ""; // 원시 메시지 초기화
-                console.log("Stream ended. Chat enabled.");
-                return;
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected:', event);
+                isStreaming = false;
+                removeLoadingIndicator();
+                appendMessage('system', '챗봇 연결이 끊어졌습니다. 페이지를 새로고침하여 다시 연결해주세요.', 'system-message');
+                // 연결 끊김 시 입력 비활성화
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                isStreaming = false;
+                removeLoadingIndicator();
+                appendMessage('system', '웹소켓 오류가 발생했습니다. 콘솔을 확인해주세요.', 'system-message');
+            };
+        }
+
+        function appendMessage(sender, text, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message-bubble', className);
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight; // 스크롤을 맨 아래로
+            return messageDiv;
+        }
+
+        function addLoadingIndicator() {
+            const existingLoading = document.getElementById('loadingIndicator');
+            if (existingLoading) return; // 이미 로딩 인디케이터가 있으면 추가하지 않음
+
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingIndicator';
+            loadingDiv.classList.add('loading-indicator');
+            loadingDiv.innerHTML = `
+                <div class="dot-pulse"></div>
+                <div class="dot-pulse"></div>
+                <div class="dot-pulse"></div>
+                <span>생각 중...</span>
+            `;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLoadingIndicator() {
+            const loadingDiv = document.getElementById('loadingIndicator');
+            if (loadingDiv) {
+                loadingDiv.remove();
             }
+        }
 
-            // 스트리밍 중인 텍스트 처리
-            // Raw 텍스트를 계속 누적합니다.
-            currentBotRawMessage += event.data;
+        sendButton.addEventListener('click', () => {
+            sendMessage();
+        });
 
-            if (lastBotMessageElement) {
-                // 기존 봇 메시지 요소에 누적된 텍스트를 마크다운으로 파싱하여 HTML로 설정
-                const parsedHtml = marked.parse(currentBotRawMessage);
-                // DOMPurify로 XSS 공격 방어 (선택 사항이지만 권장)
-                lastBotMessageElement.querySelector('.content').innerHTML = DOMPurify.sanitize(parsedHtml);
-            } else {
-                // 새로운 봇 메시지 요소 생성
-                const messageWrapper = document.createElement("div");
-                messageWrapper.className = "message message-bot";
-                const contentDiv = document.createElement("div"); // P 태그 대신 Div 사용
-                contentDiv.className = "content";
-                const parsedHtml = marked.parse(currentBotRawMessage);
-                contentDiv.innerHTML = DOMPurify.sanitize(parsedHtml); // 초기 렌더링 시에도 마크다운 파싱
-                messageWrapper.appendChild(contentDiv);
-                messagesDiv.appendChild(messageWrapper);
-                lastBotMessageElement = messageWrapper;
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
             }
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // 스크롤을 항상 최하단으로
-        };
-
-        ws.onclose = function(event) {
-            console.log("WebSocket 연결 종료:", event);
-            const p = document.createElement("p");
-            p.style.color = 'red';
-            p.innerHTML = "<strong>연결이 끊어졌습니다. 페이지를 새로고침하세요.</strong>";
-            messagesDiv.appendChild(p);
-            disableChat(true); // 완전히 비활성화
-        };
-
-        ws.onerror = function(event) {
-            console.error("WebSocket 에러:", event);
-            const p = document.createElement("p");
-            p.style.color = 'red';
-            p.innerHTML = "<strong>WebSocket 에러 발생.</strong>";
-            messagesDiv.appendChild(p);
-            disableChat(true);
-        };
+        });
 
         function sendMessage() {
             const message = messageInput.value.trim();
-            if (message && !sendButton.disabled) {
+            if (message && ws && ws.readyState === WebSocket.OPEN && !isStreaming) {
+                appendMessage('user', message, 'user-message');
                 ws.send(message);
-
-                // 사용자 메시지를 화면에 표시
-                const messageWrapper = document.createElement("div");
-                messageWrapper.className = "message message-user";
-                const contentP = document.createElement("p");
-                contentP.className = "content";
-                contentP.textContent = message;
-                messageWrapper.appendChild(contentP);
-                messagesDiv.appendChild(messageWrapper);
-
-                messageInput.value = ""; // 입력 필드 초기화
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-                disableChat(); // 응답 대기 동안 채팅 UI 비활성화
+                messageInput.value = '';
+                isStreaming = true; // 스트리밍 시작
+                // 메시지 입력 비활성화
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            } else if (isStreaming) {
+                console.log("스트리밍 중에는 새로운 메시지를 보낼 수 없습니다.");
+            } else {
+                console.log("웹소켓 연결이 준비되지 않았거나 메시지가 비어 있습니다.");
             }
         }
 
-        function disableChat(isPermanent = false) {
-            messageInput.disabled = true;
-            sendButton.disabled = true;
-            messageInput.placeholder = isPermanent ? "연결 끊김" : "응답을 기다리는 중...";
-        }
-
-        function enableChat() {
-            messageInput.disabled = false;
-            sendButton.disabled = false;
-            messageInput.placeholder = "메시지를 입력하세요...";
-            messageInput.focus();
-        }
+        // 페이지 로드 시 웹소켓 연결
+        window.addEventListener('load', connectWebSocket);
     </script>
 </body>
 </html>
