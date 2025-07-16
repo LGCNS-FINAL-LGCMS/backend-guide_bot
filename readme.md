@@ -1,4 +1,4 @@
-poetry run python app/ingest_data.py
+poetry run python embedding/ingest_data_local.py
 
 이걸로 벡터db를 만듭니다.
 
