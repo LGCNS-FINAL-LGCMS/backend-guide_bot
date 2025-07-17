@@ -1,27 +1,54 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from app.services.langchain_service import get_rag_chain
+from app.config import init_db_connections
+from app.services.langchain_service import get_rag_chain, init_langchain_services
 from app.services.websocket_service import handle_websocket_connection
 
-app = FastAPI()
+import logging
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global rag_chain
+    logger.info("Application startup event triggered.")
+
+    # 1. config.py의 데이터베이스 연결 초기화 (MongoDB 클라이언트 연결)
+    await init_db_connections()
+
+    # 2. langchain_service.py의 LangChain 관련 서비스 초기화 (MongoDB 컬렉션 인스턴스, VectorStore)
+    await init_langchain_services()
+
+    # 3. 모든 리소스가 초기화된 후 RAG 체인 생성
+    rag_chain = get_rag_chain()
+
+    if rag_chain:
+        logger.info("RAG chain initialized successfully during startup.")
+    else:
+        logger.error("Failed to initialize RAG chain during startup.")
+    yield
+
+
+
+app = FastAPI(lifespan=lifespan)
 
 templates= Jinja2Templates(directory="templates")
 
 # rag_chain을 전역 변수로 선언하되, 초기화는 startup 이벤트에서
 rag_chain = None
 
-@app.on_event("startup")
-async def startup_event():
-    global rag_chain
-    logger.info("Application startup event triggered.")
-    await init_db_connections()  # 데이터베이스 연결 초기화
-    rag_chain = get_rag_chain()
-    if rag_chain:
-        logger.info("RAG chain initialized successfully during startup.")
-    else:
-        logger.error("Failed to initialize RAG chain during startup.")
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -40,6 +67,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+
     # Uvicorn 로거 설정 (FastAPI 로거와 별개)
     uvicorn_logger = logging.getLogger("uvicorn.access")
     uvicorn_logger.addHandler(handler)
@@ -48,5 +76,4 @@ if __name__ == "__main__":
     uvicorn_error_logger = logging.getLogger("uvicorn.error")
     uvicorn_error_logger.addHandler(handler)
     uvicorn_error_logger.setLevel(logging.ERROR)
-
     uvicorn.run(app, host="0.0.0.0", port=8000)

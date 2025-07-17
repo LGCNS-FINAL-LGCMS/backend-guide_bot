@@ -8,6 +8,8 @@ from langchain_community.vectorstores import PGVector
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 
+from app.services.langchain_service import mongo_collection_instance
+
 # 로깅 설정
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -88,27 +90,27 @@ def get_embeddings(use_bedrock: bool = False):
 def get_vectorstore(embeddings_model):
     """PGVector VectorStore를 초기화하여 반환합니다."""
     if not PG_CONNECTION_STRING:
-        logger.warning("[WARNING] PG_CONNECTION_STRING 환경 변수가 설정되지 않았습니다. PGVector를 사용할 수 없습니다.")
+        logger.warning("PG_CONNECTION_STRING 환경 변수가 설정되지 않았습니다. PGVector를 사용할 수 없습니다.")
         return None
     try:
         vectorstore = PGVector(
             connection_string=PG_CONNECTION_STRING,
             embedding_function=embeddings_model,
-            collection_name=PG_COLLECTION_NAME, # Q만 저장된 컬렉션 이름 사용
-            # 검색 전용이므로 pre_delete_collection=False (또는 제거)
+            collection_name=PG_COLLECTION_NAME,
         )
         logger.info("PGVector VectorStore connected and ready.")
         return vectorstore
     except Exception as e:
-        logger.error(f"[ERROR] Failed to connect to PGVector or retrieve data: {e}")
+        logger.error(f"Failed to connect to PGVector or retrieve data: {e}")
         logger.error("Please ensure your PostgreSQL database is running, pgvector extension is enabled, and PG_CONNECTION_STRING is correct.")
         return None
 
-async def get_mongo_collection():
-    """MongoDB 컬렉션 객체를 반환하는 비동기 함수. 클라이언트가 없으면 연결을 시도합니다."""
+async def _initialize_mongo_connection():
+    """MongoDB 클라이언트와 컬렉션을 초기화하는 내부 비동기 함수"""
     global _mongo_client, _mongo_collection
     if not MONGO_CONNECTION_STRING or not MONGO_DB_NAME or not MONGO_COLLECTION_NAME:
         logger.warning("MongoDB 환경 변수가 설정되지 않았습니다. MongoDB를 사용할 수 없습니다.")
+
         return None
 
     if _mongo_client is None:
@@ -118,23 +120,29 @@ async def get_mongo_collection():
             await _mongo_client.admin.command('ping')
             logger.info("Successfully connected to MongoDB.")
         except Exception as e:
+            # 연결 실패 시 초기화
             logger.error(f"Could not connect to MongoDB: {e}")
             logger.error("Please ensure MongoDB is running and MONGO_CONNECTION_STRING/DB_NAME/COLLECTION_NAME in .env are correct.")
-            _mongo_client = None  # 연결 실패 시 클라이언트 초기화
+            _mongo_client = None
             _mongo_collection = None
             return None
 
-    if _mongo_collection is None:
+    if _mongo_collection is None and _mongo_client is not None:
         db = _mongo_client[MONGO_DB_NAME]
         _mongo_collection = db[MONGO_COLLECTION_NAME]
         logger.info(f"MongoDB collection '{MONGO_COLLECTION_NAME}' selected.")
+    return _mongo_collection
 
+def get_mongo_collection():
+    """초기화된 MongoDB 컬렉션 객체를 반환합니다. 초기화되지 않았다면 RuntimeError를 발생시킵니다."""
+    if _mongo_collection is None:
+        logger.error("MongoDB collection has not been initialized. Call init_db_connections() first.")
+        raise RuntimeError("MongoDB collection not initialized.")
     return _mongo_collection
 
 async def init_db_connections():
     """애플리케이션 시작 시 모든 데이터베이스 연결을 초기화합니다."""
     logger.info("Initializing database connections...")
-    # MongoDB 연결 초기화
-    await get_mongo_collection()
-    # PGVector는 get_vectorstore 호출 시 초기화되므로 별도 초기화 함수는 필요 없음
+    await _initialize_mongo_connection() # MongoDB 연결 초기화
+    # PGVector는 get_vectorstore 호출 시 초기화되므로 별도 초기화 함수는 필요 x
     logger.info("Database connections initialized.")
