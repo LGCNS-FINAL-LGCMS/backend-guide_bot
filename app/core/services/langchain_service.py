@@ -10,7 +10,7 @@ import logging
 import os
 
 from app.config import get_llm, get_embeddings, get_vectorstore, get_mongo_collection
-from app.utils.prompt_loader import load_prompt_from_yaml
+from app.core.utils.prompt_loader import load_prompt_from_yaml
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ mongo_collection_instance = None
 LMS_SERVICE_NAME = "lgcms"
 
 # 원본경로설정
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_FILE_PATH = os.path.join(BASE_DIR, "prompts", "rag_prompt.yaml")
 
 async def init_langchain_services():

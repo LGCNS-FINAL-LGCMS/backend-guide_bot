@@ -7,7 +7,6 @@ from langchain_core.documents import Document
 
 # app.config에서 필요한 모듈 임포트
 from app.config import get_embeddings, get_vectorstore, PG_COLLECTION_NAME
-from app.services.langchain_service import get_rag_chain
 
 # 환경 변수 로드
 load_dotenv()

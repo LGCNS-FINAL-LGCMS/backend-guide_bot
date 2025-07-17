@@ -3,7 +3,7 @@ import os
 
 import logging
 
-from app.utils.prompt_loader import load_prompt_from_yaml
+from app.core.utils.prompt_loader import load_prompt_from_yaml
 
 # 로깅 설정
 logger = logging.getLogger(__name__)

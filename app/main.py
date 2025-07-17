@@ -5,8 +5,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import init_db_connections
-from app.services.langchain_service import get_rag_chain, init_langchain_services
-from app.services.websocket_service import handle_websocket_connection
+from app.core.services.langchain_service import get_rag_chain, init_langchain_services
+from app.core.services.websocket_service import handle_websocket_connection
 
 import logging
 

@@ -1,10 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, patch
 from bson.objectid import ObjectId
 import asyncio
 from datetime import datetime
 
-from app.services.langchain_service import get_answer_from_mongodb, mongo_collection_instance # mongo_collection_instance를 직접 임포트
+from app.core.services.langchain_service import get_answer_from_mongodb  # mongo_collection_instance를 직접 임포트
 
 # mongomock을 사용하여 실제 MongoDB 컬렉션처럼 동작하는 모의 객체 생성
 # AsyncMock으로 래핑하여 await 가능한 객체로 만듭니다.
