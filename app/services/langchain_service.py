@@ -3,6 +3,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_core.runnables import RunnableMap
 from bson.objectid import ObjectId
 from typing import List, Dict, Any
 import logging
@@ -31,7 +32,7 @@ mongo_collection_instance = None
 LMS_SERVICE_NAME = "lgcms"
 
 # 원본경로설정
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_FILE_PATH = os.path.join(BASE_DIR, "prompts", "rag_prompt.yaml")
 
 async def init_langchain_services():
@@ -45,7 +46,7 @@ async def init_langchain_services():
     # MongoDB 컬렉션 초기화 (config.py에서 이미 연결된 인스턴스를 가져옴)
     try:
         mongo_collection_instance = get_mongo_collection()
-        if mongo_collection_instance:
+        if mongo_collection_instance is not None:
             logger.info("MongoDB collection instance successfully retrieved.")
         else:
             logger.error("Failed to get MongoDB collection instance from config.")
@@ -133,6 +134,7 @@ def get_rag_chain():
         return prompt | llm | StrOutputParser()
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    logger.info(retriever)
     try:
         loaded_templates = load_prompt_from_yaml(DATA_FILE_PATH)
         system_template_str = loaded_templates["system_template"]
@@ -155,7 +157,7 @@ def get_rag_chain():
             HumanMessagePromptTemplate.from_template("{question}")
         ]).partial(LMS_SERVICE_NAME="기본 서비스")
 
-    from langchain_core.runnables import RunnableMap
+
     rag_chain = (
             RunnableMap({
                 "context": retriever,

@@ -8,8 +8,6 @@ from langchain_community.vectorstores import PGVector
 from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 
-from app.services.langchain_service import mongo_collection_instance
-
 # 로깅 설정
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
