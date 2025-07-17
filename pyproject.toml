@@ -6,36 +6,33 @@ description = "실시간 응답을 해주는 fastapi로 제작한 랭체인 rag�
 authors = [
     { name = "Sunhokim2", email = "mcwright@naver.com" } # 당신의 이름과 이메일로 변경하세요
 ]
-dependencies = [
-    # 웹 애플리케이션 프레임워크
-    "fastapi>=0.111.0",           # FastAPI: 고성능 웹 API를 구축하기 위한 현대적인, 빠른(고성능) 웹 프레임워크
-    "uvicorn[standard]>=0.30.1",  # Uvicorn: FastAPI 애플리케이션을 실행하는 ASGI 서버 (standard는 h11, websockets 등 포함)
-
-    # LLM 및 RAG 관련 핵심 라이브러리 (AWS Bedrock으로 변경)
-    "boto3>=1.34.128",            # AWS 서비스 (Bedrock)와 상호작용하기 위한 AWS SDK
-
-    # Bedrock 임베딩을 사용하므로 sentence-transformers는 필수는 아니지만, 특정 목적에 따라 유지 가능
-    "sentence-transformers>=2.7.0", # 필요에 따라 유지 또는 삭제 (HuggingFaceEmbeddings 사용 시 필요)
-
-    # LangChain 프레임워크 (모듈화된 최신 버전 및 AWS 통합)
-    "langchain-core>=0.2.14",     # LangChain Core: 프롬프트, 스키마, Runnable 등 LangChain의 핵심 컴포넌트
-    "langchain-community>=0.2.11",# LangChain Community: 다양한 데이터 로더, 리트리버, 툴 등 커뮤니티 기여 통합 (PGVector 포함)
-    "langchain-aws>=0.1.0",       # LangChain AWS: ChatBedrock, BedrockEmbeddings 등 AWS Bedrock과의 통합
-
-    # PostgreSQL 및 Pgvector 관련 의존성 추가
-    "psycopg2-binary>=2.9.9",     # PostgreSQL 데이터베이스 드라이버
-    "pgvector",            # Pgvector 파이썬 클라이언트 라이브러리
-
-    # 기타 유틸리티
-    "python-dotenv>=1.0.1",       # Python-dotenv: .env 파일에서 환경 변수를 로드하기 위함 (AWS_REGION_NAME 등)
-    "pydantic>=2.7.4",            # FastAPI의 데이터 유효성 검사 및 설정 관리에 사용되는 라이브러리
-    "transformers>=4.41.2",       # sentence-transformers의 의존성일 수 있음 (제거 시 필요에 따라 삭제)
-    # FAISS (pgvector 사용 시 주된 벡터 스토어 역할은 아님. 필요에 따라 삭제 가능)
-    # "faiss-cpu>=1.8.0",
-]
-requires-python = ">=3.9,<3.13.6" # 호환되는 Python 버전 범위 지정
-license = { text = "MIT" }
 readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+
+# 웹 애플리케이션 프레임워크
+fastapi = ">=0.111.0"           # FastAPI: 고성능 웹 API를 구축하기 위한 현대적인, 빠른(고성능) 웹 프레임워크
+uvicorn = { extras = ["standard"], version = ">=0.30.1" } # Uvicorn: FastAPI 애플리케이션을 실행하는 ASGI 서버 (standard는 h11, websockets 등 포함)
+
+# LLM 및 RAG 관련 핵심 라이브러리 (AWS Bedrock 통합)
+boto3 = ">=1.34.128"            # AWS 서비스 (Bedrock)와 상호작용하기 위한 AWS SDK
+sentence-transformers = ">=2.7.0" # 임베딩 모델 로드에 사용될 수 있습니다. (HuggingFaceEmbeddings 사용 시 필요)
+
+# LangChain 프레임워크 (모듈화된 최신 버전 및 AWS 통합)
+langchain-core = ">=0.2.14"     # LangChain Core: 프롬프트, 스키마, Runnable 등 LangChain의 핵심 컴포넌트
+langchain-community = ">=0.2.11"# LangChain Community: 다양한 데이터 로더, 리트리버, 툴 등 커뮤니티 기여 통합 (PGVector 포함)
+langchain-aws = ">=0.1.0"       # LangChain AWS: ChatBedrock, BedrockEmbeddings 등 AWS Bedrock과의 통합
+
+# PostgreSQL 및 Pgvector 관련 의존성
+psycopg2-binary = ">=2.9.9"     # PostgreSQL 데이터베이스 드라이버
+pgvector = "*"                  # Pgvector 파이썬 클라이언트 라이브러리 (특정 버전 지정이 없으므로 최신 호환 버전)
+
+# 기타 유틸리티
+python-dotenv = ">=1.0.1"       # Python-dotenv: .env 파일에서 환경 변수를 로드하기 위함 (AWS_REGION_NAME 등)
+pydantic = ">=2.7.4"            # FastAPI의 데이터 유효성 검사 및 설정 관리에 사용되는 라이브러리
+transformers = ">=4.41.2"       # Hugging Face Transformers 라이브러리 (sentence-transformers의 의존성일 수 있음)
+pyyaml = "*"                    # YAML 파일 처리를 위해 명시적으로 추가 (load_prompt_from_yaml 함수에서 사용)
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
