@@ -11,6 +11,10 @@ import os
 
 from app.config import get_llm, get_embeddings, get_vectorstore, get_mongo_collection
 from app.core.utils.prompt_loader import load_prompt_from_yaml
+# 사용자 정의 예외 임포트
+from app.common.exception.CustomException import (
+    NotFoundError, BadRequestError, ServiceUnavailableError, CustomException
+)
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -38,7 +42,7 @@ DATA_FILE_PATH = os.path.join(BASE_DIR, "prompts", "rag_prompt.yaml")
 async def init_langchain_services():
     """
     LangChain 서비스에 필요한 전역 리소스(MongoDB 컬렉션, VectorStore)를 초기화합니다.
-    이 함수는 FastAPI startup 이벤트에서 호출되어야 합니다.
+    이 함수는 FastAPI lifespan 이벤트에서 호출되어야 합니다.
     """
     global vectorstore, mongo_collection_instance
     logger.info("Initializing LangChain specific services...")
@@ -50,9 +54,11 @@ async def init_langchain_services():
             logger.info("MongoDB collection instance successfully retrieved.")
         else:
             logger.error("Failed to get MongoDB collection instance from config.")
+            raise ServiceUnavailableError("MongoDB 컬렉션 초기화에 실패했습니다.")
     except RuntimeError as e:
         logger.error(f"Error getting MongoDB collection: {e}")
         mongo_collection_instance = None  # 초기화 실패 시 None으로 설정
+        raise ServiceUnavailableError(f"MongoDB 컬렉션 가져오기 오류: {e}") from e
 
     # PGVector VectorStore 초기화
     vectorstore = get_vectorstore(embeddings)
@@ -60,6 +66,7 @@ async def init_langchain_services():
         logger.info("PGVector VectorStore initialized.")
     else:
         logger.error("Failed to initialize PGVector VectorStore.")
+        raise ServiceUnavailableError("PGVector VectorStore 초기화에 실패했습니다.")
 
     logger.info("LangChain services initialization complete.")
 
@@ -69,19 +76,27 @@ async def get_answer_from_mongodb(mongo_id: str):
     # 전역으로 초기화된 mongo_collection_instance를 사용합니다.
     if mongo_collection_instance is None:
         logger.error("[ERROR] MongoDB collection is not initialized in langchain_service.py.")
-        return "죄송합니다, 답변을 가져올 수 없습니다. 데이터베이스 연결 문제일 수 있습니다."
+        raise ServiceUnavailableError("MongoDB 데이터베이스 연결이 초기화되지 않았습니다.")
+
     try:
         object_id = ObjectId(mongo_id)
+    except Exception as e:
+        raise BadRequestError(f"유효하지 않은 MongoDB ID 형식입니다: {mongo_id}") from e
+
+    try:
         # find_one 메서드는 비동기이므로 반드시 await 해야 합니다.
         document = await mongo_collection_instance.find_one({"_id": object_id})
         if document and "original_answer" in document:
             return document["original_answer"]
         else:
             logger.warning(f"[WARN] No original_answer found for mongo_id: {mongo_id}")
-            return "죄송합니다, 해당 질문에 대한 원본 답변을 찾을 수 없습니다."
+            raise NotFoundError(f"MongoDB에서 ID '{mongo_id}'에 해당하는 문서를 찾을 수 없습니다.")
     except Exception as e:
         logger.error(f"[ERROR] Failed to fetch answer from MongoDB for ID {mongo_id}: {e}")
-        return f"죄송합니다, 답변 조회 중 오류가 발생했습니다: {e}"
+        raise CustomException(
+            status="ERROR",  # CustomException은 status를 직접 받음
+            message=f"MongoDB에서 답변 조회 중 알 수 없는 오류 발생 (ID: {mongo_id}): {e}"
+        ) from e
 
 
 async def format_docs_and_fetch_answers(input_dict: Dict[str, Any]) -> str:
@@ -97,7 +112,7 @@ async def format_docs_and_fetch_answers(input_dict: Dict[str, Any]) -> str:
 
     if not all(isinstance(doc, Document) for doc in docs):
         logger.error(f"[ERROR] Expected list of LangChain Document objects in 'context', but received: {docs}")
-        return "오류: 내부 데이터 형식이 올바르지 않습니다."
+        raise BadRequestError(f"컨텍스트에 예상치 못한 형식의 데이터가 포함되어 있습니다. 예상: Document 객체 리스트, 실제: {type(docs)} 또는 내부 요소 타입 불일치.")
 
     fetch_tasks = []
     questions = []

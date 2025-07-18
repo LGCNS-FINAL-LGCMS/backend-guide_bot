@@ -4,12 +4,22 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.common.exception.CustomException import CustomException
 from app.config import init_db_connections
 from app.core.services.langchain_service import get_rag_chain, init_langchain_services
 from app.core.services.websocket_service import handle_websocket_connection
+from fastapi.exceptions import HTTPException as FastAPIHTTPException, RequestValidationError
 
 import logging
+from app.core.ExceptionHandler import (
+    handle_custom_exception,
+    handle_http_exception,
+    handle_validation_exception,
+    handle_unhandled_exception
+)
 
+# rag_chain을 전역 변수로 선언하되, 초기화는 startup 이벤트에서
+rag_chain = None
 # 로깅 설정
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -17,7 +27,6 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,15 +47,17 @@ async def lifespan(app: FastAPI):
     else:
         logger.error("Failed to initialize RAG chain during startup.")
     yield
-
-
-
 app = FastAPI(lifespan=lifespan)
 
-templates= Jinja2Templates(directory="templates")
+# --- 전역 예외 핸들러 등록 ---
+# @app.exception_handler 데코레이터를 사용하여 임포트된 함수들을 등록
+app.exception_handler(CustomException)(handle_custom_exception)
+app.exception_handler(FastAPIHTTPException)(handle_http_exception)
+app.exception_handler(RequestValidationError)(handle_validation_exception)
+app.exception_handler(Exception)(handle_unhandled_exception)
 
-# rag_chain을 전역 변수로 선언하되, 초기화는 startup 이벤트에서
-rag_chain = None
+
+templates= Jinja2Templates(directory="templates")
 
 
 

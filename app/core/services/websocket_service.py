@@ -1,4 +1,10 @@
 from fastapi import WebSocket, WebSocketDisconnect
+# 사용자 정의 예외 임포트
+from app.common.exception.CustomException import (
+    NotFoundError, BadRequestError, ServiceUnavailableError, CustomException
+)
+from app.common.dto.ApiResponseDto import ApiResponseDto, dataDto
+from app.common.EnumStatus import Status
 
 async def handle_websocket_connection(websocket: WebSocket, rag_chain):
     """
@@ -23,13 +29,29 @@ async def handle_websocket_connection(websocket: WebSocket, rag_chain):
                     full_response += chunk
 
                 # 스트림이 모두 끝나면, 프론트엔드에 종료 신호를 보냅니다.
+                # 그 이후 전체 답변을 json구조로 보낸다. 더 견고하다.
                 await websocket.send_text("__END_OF_STREAM__")
+
+
+                final_api_response = ApiResponseDto[dataDto](
+                    status=Status.OK.value,
+                    message="챗봇 답변이 성공적으로 생성되었습니다.",
+                    data=dataDto(answer=full_response)
+                )
+                await websocket.send_json(final_api_response.model_dump())
+
                 print(f"Full response sent, followed by end-of-stream signal.")
 
             except Exception as e:
                 print(f"Error during RAG chain execution: {e}")
-                error_message = f"오류가 발생했습니다: {e}"
-                await websocket.send_text(error_message)
+
+                error_response = ApiResponseDto[None](
+                    status=Status.ERROR.value,
+                    message="챗봇 처리 중 알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+                    data=None
+                )
+                await websocket.send_json(error_response.model_dump())
+
                 await websocket.send_text("__END_OF_STREAM__") # 에러 발생 시에도 UI 활성화를 위해 신호 전송
 
     except WebSocketDisconnect:
