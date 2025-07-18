@@ -1,10 +1,10 @@
 from fastapi import WebSocket, WebSocketDisconnect
-# 사용자 정의 예외 임포트
-from app.common.exception.CustomException import (
-    NotFoundError, BadRequestError, ServiceUnavailableError, CustomException
+
+from app.common.dto.ApiResponseDto import (
+    ApiResponseDto, dataDto
 )
-from app.common.dto.ApiResponseDto import ApiResponseDto, dataDto
 from app.common.EnumStatus import Status
+
 
 async def handle_websocket_connection(websocket: WebSocket, rag_chain):
     """
@@ -32,7 +32,6 @@ async def handle_websocket_connection(websocket: WebSocket, rag_chain):
                 # 그 이후 전체 답변을 json구조로 보낸다. 더 견고하다.
                 await websocket.send_text("__END_OF_STREAM__")
 
-
                 final_api_response = ApiResponseDto[dataDto](
                     status=Status.OK.value,
                     message="챗봇 답변이 성공적으로 생성되었습니다.",
@@ -52,7 +51,7 @@ async def handle_websocket_connection(websocket: WebSocket, rag_chain):
                 )
                 await websocket.send_json(error_response.model_dump())
 
-                await websocket.send_text("__END_OF_STREAM__") # 에러 발생 시에도 UI 활성화를 위해 신호 전송
+                await websocket.send_text("__END_OF_STREAM__")  # 에러 발생 시에도 UI 활성화를 위해 신호 전송
 
     except WebSocketDisconnect:
         print("Client disconnected.")

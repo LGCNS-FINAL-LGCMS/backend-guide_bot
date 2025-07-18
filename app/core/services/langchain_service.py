@@ -1,19 +1,34 @@
 import asyncio
-from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_core.runnables import RunnableMap
-from bson.objectid import ObjectId
-from typing import List, Dict, Any
 import logging
 import os
+from typing import List, Dict, Any
 
-from app.config import get_llm, get_embeddings, get_vectorstore, get_mongo_collection
+from bson.objectid import ObjectId
+from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
+from langchain_core.runnables import (
+    RunnablePassthrough,
+    RunnableLambda,
+    RunnableMap,
+)
+
+from app.config import (
+    get_llm,
+    get_embeddings,
+    get_vectorstore,
+    get_mongo_collection,
+)
 from app.core.utils.prompt_loader import load_prompt_from_yaml
-# 사용자 정의 예외 임포트
 from app.common.exception.CustomException import (
-    NotFoundError, BadRequestError, ServiceUnavailableError, CustomException
+    NotFoundError,
+    BadRequestError,
+    ServiceUnavailableError,
+    CustomException,
 )
 
 # 로깅 설정
@@ -24,58 +39,41 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# LLM 및 Embeddings 초기화 (여기서 use_bedrock=True로 변경하여 Bedrock 사용 가능)
+# LangChain 설정
+LMS_SERVICE_NAME = "lgcms"
+BASE_DIR = os.path.abspath(os.path.join(__file__, "../../../../"))
+DATA_FILE_PATH = os.path.join(BASE_DIR, "prompts", "rag_prompt.yaml")
+
+# 전역 리소스 (lifespan에서 초기화)
 llm = get_llm(use_bedrock=False)
 embeddings = get_embeddings(use_bedrock=False)
-
-# PGVector 및 MongoDB 컬렉션 인스턴스를 저장할 전역 변수 (lifespan시 초기화)
 vectorstore = None
 mongo_collection_instance = None
 
-# RAG 체인 설정
-LMS_SERVICE_NAME = "lgcms"
-
-# 원본경로설정
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DATA_FILE_PATH = os.path.join(BASE_DIR, "prompts", "rag_prompt.yaml")
 
 async def init_langchain_services():
-    """
-    LangChain 서비스에 필요한 전역 리소스(MongoDB 컬렉션, VectorStore)를 초기화합니다.
-    이 함수는 FastAPI lifespan 이벤트에서 호출되어야 합니다.
-    """
+    """LangChain 서비스 초기화 (MongoDB 및 PGVector 등)"""
     global vectorstore, mongo_collection_instance
     logger.info("Initializing LangChain specific services...")
 
-    # MongoDB 컬렉션 초기화 (config.py에서 이미 연결된 인스턴스를 가져옴)
     try:
         mongo_collection_instance = get_mongo_collection()
-        if mongo_collection_instance is not None:
-            logger.info("MongoDB collection instance successfully retrieved.")
-        else:
-            logger.error("Failed to get MongoDB collection instance from config.")
+        if mongo_collection_instance is None:
             raise ServiceUnavailableError("MongoDB 컬렉션 초기화에 실패했습니다.")
-    except RuntimeError as e:
-        logger.error(f"Error getting MongoDB collection: {e}")
-        mongo_collection_instance = None  # 초기화 실패 시 None으로 설정
+        logger.info("MongoDB collection instance successfully retrieved.")
+    except Exception as e:
+        logger.error(f"MongoDB collection init error: {e}")
         raise ServiceUnavailableError(f"MongoDB 컬렉션 가져오기 오류: {e}") from e
 
-    # PGVector VectorStore 초기화
     vectorstore = get_vectorstore(embeddings)
-    if vectorstore:
-        logger.info("PGVector VectorStore initialized.")
-    else:
-        logger.error("Failed to initialize PGVector VectorStore.")
+    if not vectorstore:
         raise ServiceUnavailableError("PGVector VectorStore 초기화에 실패했습니다.")
+    logger.info("PGVector VectorStore initialized.")
 
-    logger.info("LangChain services initialization complete.")
 
-
-async def get_answer_from_mongodb(mongo_id: str):
-    """MongoDB에서 _id를 사용하여 원본 답변을 가져오는 비동기 함수"""
-    # 전역으로 초기화된 mongo_collection_instance를 사용합니다.
+async def get_answer_from_mongodb(mongo_id: str) -> str:
+    """MongoDB에서 ID로 원본 답변 조회"""
     if mongo_collection_instance is None:
-        logger.error("[ERROR] MongoDB collection is not initialized in langchain_service.py.")
         raise ServiceUnavailableError("MongoDB 데이터베이스 연결이 초기화되지 않았습니다.")
 
     try:
@@ -84,109 +82,79 @@ async def get_answer_from_mongodb(mongo_id: str):
         raise BadRequestError(f"유효하지 않은 MongoDB ID 형식입니다: {mongo_id}") from e
 
     try:
-        # find_one 메서드는 비동기이므로 반드시 await 해야 합니다.
         document = await mongo_collection_instance.find_one({"_id": object_id})
         if document and "original_answer" in document:
             return document["original_answer"]
-        else:
-            logger.warning(f"[WARN] No original_answer found for mongo_id: {mongo_id}")
-            raise NotFoundError(f"MongoDB에서 ID '{mongo_id}'에 해당하는 문서를 찾을 수 없습니다.")
+        raise NotFoundError(f"MongoDB에서 ID '{mongo_id}'에 해당하는 문서를 찾을 수 없습니다.")
     except Exception as e:
-        logger.error(f"[ERROR] Failed to fetch answer from MongoDB for ID {mongo_id}: {e}")
         raise CustomException(
-            status="ERROR",  # CustomException은 status를 직접 받음
-            message=f"MongoDB에서 답변 조회 중 알 수 없는 오류 발생 (ID: {mongo_id}): {e}"
+            status="ERROR",
+            message=f"MongoDB에서 답변 조회 오류 (ID: {mongo_id}): {e}"
         ) from e
 
 
 async def format_docs_and_fetch_answers(input_dict: Dict[str, Any]) -> str:
-    """
-    LangChain 체인으로부터 딕셔너리 입력을 받아 Document (질문)에서 MongoDB ID를 추출하고,
-    MongoDB에서 원본 답변을 비동기적으로 병렬로 가져와 하나의 문자열로 합칩니다.
-    """
+    """Document 목록에서 MongoDB ID 추출 → 원본 답변 비동기 조회 → 문장 합치기"""
     docs: List[Document] = input_dict.get("context", [])
 
     if not docs:
-        logger.warning("[WARN] format_docs_and_fetch_answers received an empty list of documents from 'context' key.")
+        logger.warning("Empty context received in format_docs_and_fetch_answers.")
         return ""
-
     if not all(isinstance(doc, Document) for doc in docs):
-        logger.error(f"[ERROR] Expected list of LangChain Document objects in 'context', but received: {docs}")
-        raise BadRequestError(f"컨텍스트에 예상치 못한 형식의 데이터가 포함되어 있습니다. 예상: Document 객체 리스트, 실제: {type(docs)} 또는 내부 요소 타입 불일치.")
+        raise BadRequestError("context에는 Document 객체 리스트만 허용됩니다.")
 
-    fetch_tasks = []
-    questions = []
-    for doc in docs:
-        question = doc.page_content
-        mongo_id = doc.metadata.get("mongo_id")
-        questions.append(question)
-
-        if mongo_id:
-            fetch_tasks.append(get_answer_from_mongodb(mongo_id))
-        else:
-            fetch_tasks.append(asyncio.sleep(0, result="MongoDB ID 없음"))  # ID가 없는 경우를 위한 더미 태스크
-
+    fetch_tasks = [
+        get_answer_from_mongodb(doc.metadata.get("mongo_id")) if doc.metadata.get("mongo_id")
+        else asyncio.sleep(0, result="MongoDB ID 없음")
+        for doc in docs
+    ]
+    questions = [doc.page_content for doc in docs]
     original_answers = await asyncio.gather(*fetch_tasks)
 
-    combined_context = []
-    for i, question in enumerate(questions):
-        answer = original_answers[i]
-        combined_context.append(f"질문: {question}\n답변: {answer}")
-
-    return "\n\n".join(combined_context)
+    return "\n\n".join([
+        f"질문: {q}\n답변: {a}"
+        for q, a in zip(questions, original_answers)
+    ])
 
 
 def get_rag_chain():
-    """LangChain RAG 체인을 구성하여 반환합니다."""
-    # vectorstore가 init_langchain_services에서 초기화되었는지 확인
+    """LangChain 기반 RAG 체인 구성"""
     if vectorstore is None:
-        logger.error("RAG retriever (vectorstore) is not available. Falling back to direct LLM chat.")
-        # Fallback 프롬프트도 partial을 사용하도록 변경
+        logger.error("Vectorstore is not initialized. Using fallback prompt only.")
         prompt = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template("당신은 친절한 챗봇입니다."),
             HumanMessagePromptTemplate.from_template("{question}")
-        ]).partial(LMS_SERVICE_NAME="기본 서비스")  # LMS_SERVICE_NAME도 fallback에 포함
+        ]).partial(LMS_SERVICE_NAME="기본 서비스")
         return prompt | llm | StrOutputParser()
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    logger.info(retriever)
     try:
-        loaded_templates = load_prompt_from_yaml(DATA_FILE_PATH)
-        system_template_str = loaded_templates["system_template"]
-        human_template_str = loaded_templates["human_template"]
-
-        system_message_prompt = SystemMessagePromptTemplate.from_template(system_template_str)
-        human_message_prompt = HumanMessagePromptTemplate.from_template(human_template_str)
-
+        templates = load_prompt_from_yaml(DATA_FILE_PATH)
         prompt = ChatPromptTemplate.from_messages([
-            system_message_prompt,
-            human_message_prompt
+            SystemMessagePromptTemplate.from_template(templates["system_template"]),
+            HumanMessagePromptTemplate.from_template(templates["human_template"])
         ]).partial(LMS_SERVICE_NAME=LMS_SERVICE_NAME)
-
-        logger.info("RAG prompt loaded from YAML and structured with System/Human messages.")
     except Exception as e:
-        logger.error(f"Failed to load RAG prompt from YAML: {e}. Falling back to default RAG prompt.")
+        logger.error(f"Prompt load 실패: {e} → fallback prompt 사용")
         prompt = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template(
-                "당신은 친절하고 유용한 챗봇입니다. 다음 컨텍스트를 기반으로 질문에 답변하세요. 만약 컨텍스트에 답변이 없다면, '정보가 부족하여 답변할 수 없습니다.'라고 말하세요.\nContext: {context}"),
+                "당신은 유용한 챗봇입니다. 아래 컨텍스트 기반으로 답하세요.\nContext: {context}"
+            ),
             HumanMessagePromptTemplate.from_template("{question}")
         ]).partial(LMS_SERVICE_NAME="기본 서비스")
 
-
-    rag_chain = (
-            RunnableMap({
-                "context": retriever,
-                "question": RunnablePassthrough()
-            })
-            | RunnablePassthrough.assign(
-        context=RunnableLambda(format_docs_and_fetch_answers).with_config(run_name="FormatDocsAndFetchAnswers")
+    return (
+        RunnableMap({
+            "context": retriever,
+            "question": RunnablePassthrough()
+        })
+        | RunnablePassthrough.assign(
+            context=RunnableLambda(format_docs_and_fetch_answers)
+            .with_config(run_name="FormatDocsAndFetchAnswers")
+        )
+        | RunnableLambda(lambda x: logger.debug(
+            f"\n--- Final Prompt Input ---\nContext: {x.get('context')}\nQuestion: {x.get('question')}\nLMS_SERVICE_NAME: {x.get('LMS_SERVICE_NAME')}\n--------------------------\n") or x)
+        | prompt
+        | llm
+        | StrOutputParser()
     )
-            # 디버깅용 RunnableLambda (Final Input to Prompt)
-            | RunnableLambda(lambda x: logger.debug(
-        f"\n--- [DEBUG] Final Input to Prompt for PromptTemplate ---\nContext:\n{x.get('context', 'None')}\nQuestion: {x.get('question', 'None')}\nLMS_SERVICE_NAME: {x.get('LMS_SERVICE_NAME', 'None')}\n--- End DEBUG ---\n") or x)
-            | prompt
-            | llm
-            | StrOutputParser()
-    )
-    logger.info("RAG chain initialized with async retriever and MongoDB context fetching.")
-    return rag_chain

@@ -161,7 +161,7 @@
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         let ws;
-        let botMessageElement = null; // 현재 봇 메시지 버블을 추적
+        let botMessageElement = null;
         let isStreaming = false; // 스트리밍 중인지 여부
 
         function connectWebSocket() {
@@ -186,11 +186,11 @@
                     sendButton.disabled = false;
                     messageInput.focus();
                     chatMessages.scrollTop = chatMessages.scrollHeight;
-                    // 현재 봇 메시지 버블을 완료 상태로 표시
+                    //봇 메시지 버블을 완료 상태로 표시
                     if (botMessageElement) {
                         botMessageElement.dataset.complete = 'true';
                     }
-                    return; // 종료 신호 처리 후 함수 종료
+                    return;
                 }
 
                 try {
@@ -201,37 +201,32 @@
                     // 기존 스트리밍 메시지 버블이 있다면 완료 처리
                     if (botMessageElement && botMessageElement.dataset.complete === 'false') {
                         botMessageElement.dataset.complete = 'true'; // 스트리밍 완료
-                        removeLoadingIndicator(); // 로딩 인디케이터 제거
+                        removeLoadingIndicator();
                     }
 
                     if (jsonResponse.status === "OK") {
                         // 성공적인 최종 응답
                         if (jsonResponse.data && jsonResponse.data.answer) {
-                            // 새로운 버블을 만들거나 기존 버블을 업데이트
-                            // 여기서는 새로운 버블을 만들고 최종 답변을 표시하는 것이 더 명확할 수 있습니다.
-                            // 아니면 스트리밍 버블의 내용을 최종 답변으로 대체할 수도 있습니다.
-                            // 현재는 스트리밍 버블이 있다면 그 내용을 최종 답변으로 대체합니다.
                             if (botMessageElement && botMessageElement.dataset.complete === 'false') {
                                 botMessageElement.textContent = jsonResponse.data.answer;
                             } else {
-                                // 스트리밍이 없었거나 이미 완료된 경우 (예: 빠른 답변)
+                                // 스트리밍이 없었거나 이미 완료된 경우
                                 botMessageElement = appendMessage('bot', jsonResponse.data.answer, 'bot-message');
                             }
-                            botMessageElement.dataset.complete = 'true'; // 최종 답변이므로 완료
+                            botMessageElement.dataset.complete = 'true';
                         } else {
-                            // data.answer가 없지만 status가 OK인 경우 (예: 단순 성공 메시지)
+                            // data.answer가 없지만 status가 OK인 경우 : 성공메세지
                             botMessageElement = appendMessage('bot', jsonResponse.message || "답변을 가져올 수 없습니다.", 'bot-message');
                             botMessageElement.dataset.complete = 'true';
                         }
                     } else if (jsonResponse.status === "ERROR") {
-                        // 오류 응답
                         // 기존 스트리밍 메시지 버블이 있다면 내용을 지우고 오류 메시지를 표시
                         if (botMessageElement && botMessageElement.dataset.complete === 'false') {
                             botMessageElement.textContent = ''; // 부분 스트림 내용 지우기
                         }
                         // 오류 메시지를 위한 새로운 버블 생성
                         const errorBubble = appendMessage('bot', jsonResponse.message || "알 수 없는 오류가 발생했습니다.", 'bot-message error-message');
-                        errorBubble.dataset.complete = 'true'; // 오류 메시지이므로 완료
+                        errorBubble.dataset.complete = 'true';
                     }
 
                     // JSON 메시지를 받으면 스트리밍이 완료된 것으로 간주하고 상태 초기화
@@ -244,11 +239,10 @@
 
                 } catch (e) {
                     // 3. JSON 파싱 실패 시 (텍스트 청크)
-                    // console.log("Received text chunk:", message); // 디버깅용
                     if (!botMessageElement || botMessageElement.dataset.complete === 'true') {
                         // 새로운 봇 메시지 버블을 시작 (스트리밍 시작)
                         botMessageElement = appendMessage('bot', '', 'bot-message');
-                        botMessageElement.dataset.complete = 'false'; // 스트리밍 중임을 표시
+                        botMessageElement.dataset.complete = 'false'; // 스트리밍 중
                         addLoadingIndicator(); // 로딩 인디케이터 추가
                     }
                     // 현재 봇 메시지 버블에 텍스트 청크 추가
