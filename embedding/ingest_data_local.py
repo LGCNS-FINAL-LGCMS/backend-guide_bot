@@ -3,6 +3,8 @@ import json
 from dotenv import load_dotenv
 from datetime import datetime
 
+from app.common.dto.ApiResponseDto import PgVectorDocumentMetadata
+
 load_dotenv()
 
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -10,26 +12,27 @@ from langchain_community.vectorstores import PGVector
 from langchain_core.documents import Document
 
 from pymongo import MongoClient
-from bson.objectid import ObjectId # MongoDB _id를 사용하기 위해 임포트
+from bson.objectid import ObjectId  # MongoDB _id를 사용하기 위해 임포트
 
-import psycopg2 #pgvector 테스트용
+import psycopg2  # pgvector 테스트용
 
 # 환경변수
 PG_CONNECTION_STRING = os.getenv("PG_CONNECTION_STRING")
-MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
-MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
+# MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
+# MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
+# MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 
 # 원본데이터 경로
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE_PATH = os.path.join(BASE_DIR, "data", "product_faq.json")
 
-PG_COLLECTION_NAME = "guide_bot_embedded_q" # PGVector에 Q만 저장할 컬렉션 이름
+PG_COLLECTION_NAME = "guide_bot_embedded_q"  # PGVector에 저장할 컬렉션 이름
 
 # 임베딩 모델 (로컬용 허깅페이스)
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
+
 
 # --- 데이터베이스 연결 테스트 함수 ---
 def check_pg_connection():
@@ -47,18 +50,19 @@ def check_pg_connection():
         print("Please ensure PostgreSQL is running and PG_CONNECTION_STRING in .env is correct.")
         return False
 
-def get_mongo_client():
-    """MongoDB 클라이언트를 반환하는 함수"""
-    try:
-        client = MongoClient(MONGO_CONNECTION_STRING)
-        # 서버 상태를 확인하여 연결 테스트
-        client.admin.command('ping')
-        print("[INFO] Successfully connected to MongoDB.")
-        return client
-    except Exception as e:
-        print(f"[ERROR] Could not connect to MongoDB: {e}")
-        print("Please ensure MongoDB is running and MONGO_CONNECTION_STRING in .env is correct.")
-        return None
+
+# def get_mongo_client():
+#     """MongoDB 클라이언트를 반환하는 함수"""
+#     try:
+#         client = MongoClient(MONGO_CONNECTION_STRING)
+#         # 서버 상태를 확인하여 연결 테스트
+#         client.admin.command('ping')
+#         print("[INFO] Successfully connected to MongoDB.")
+#         return client
+#     except Exception as e:
+#         print(f"[ERROR] Could not connect to MongoDB: {e}")
+#         print("Please ensure MongoDB is running and MONGO_CONNECTION_STRING in .env is correct.")
+#         return None
 
 
 # --- 데이터 Ingestion 함수 ---
@@ -66,12 +70,12 @@ def ingest_qa_data():
     if not check_pg_connection():
         return
 
-    mongo_client = get_mongo_client()
-    if not mongo_client:
-        return
+    # mongo_client = get_mongo_client()
+    # if not mongo_client:
+    #     return
 
-    mongo_db = mongo_client[MONGO_DB_NAME]
-    mongo_collection = mongo_db[MONGO_COLLECTION_NAME]
+    # mongo_db = mongo_client[MONGO_DB_NAME]
+    # mongo_collection = mongo_db[MONGO_COLLECTION_NAME]
 
     print(f"Loading Q&A data from {DATA_FILE_PATH}...")
 
@@ -84,9 +88,9 @@ def ingest_qa_data():
 
     pg_documents = []  # PGVector에 저장할 Document 객체 리스트
 
-    # 기존 MongoDB 컬렉션 비우기 (선택 사항: 초기 테스트 시 유용)
-    print(f"[INFO] Clearing existing MongoDB collection '{MONGO_COLLECTION_NAME}'...")
-    mongo_collection.delete_many({})
+    # # 기존 MongoDB 컬렉션 비우기 (선택 사항: 초기 테스트 시 유용)
+    # print(f"[INFO] Clearing existing MongoDB collection '{MONGO_COLLECTION_NAME}'...")
+    # mongo_collection.delete_many({})
 
     print("[INFO] Processing Q&A data for ingestion...")
     for item in qa_data:
@@ -97,31 +101,20 @@ def ingest_qa_data():
             print(f"[WARN] Skipping malformed item: {item}")
             continue
 
-        # 1. 원본 답변(A)을 MongoDB에 저장
-        mongo_doc = {
-            "original_answer": answer,
-            "auth": "AI_Bot",  # 또는 실제 author 정보
-            "registered_at": datetime.now().isoformat()  # ISO 8601 형식
-        }
+        # 2. PGVector에 저장할 Document의 metadata를 DTO 형태로 구성
+        # mongo_id 필드가 제거된 PgVectorDocumentMetadata 사용
+        pg_metadata = PgVectorDocumentMetadata(
+            original_q=question,
+            original_a=answer,
+            # doc_uuid와 created_at은 default_factory에 의해 자동으로 생성됩니다.
+            # mongo_id는 더 이상 필요하지 않습니다.
+        )
 
-        # MongoDB에 문서 삽입 후 _id 받아오기
-        try:
-            result = mongo_collection.insert_one(mongo_doc)
-            mongo_id = str(result.inserted_id)  # ObjectId를 문자열로 변환하여 PGVector에 저장
-            # print(f"  [INFO] MongoDB inserted with ID: {mongo_id}")
-        except Exception as e:
-            print(f"[ERROR] Failed to insert into MongoDB: {e}")
-            continue
-
-        # 2. 질문(Q)만 LangChain Document로 만들고 MongoDB _id를 메타데이터로 추가
-        # PGVector의 page_content는 질문, metadata에는 MongoDB ID 저장
+        # 3. 질문(Q)만 LangChain Document의 page_content로 만들고 나머지는 metadata 행
         pg_documents.append(
             Document(
-                page_content=question,
-                metadata={
-                    "mongo_id": mongo_id,
-                    "source": "FAQ_Q_Only"
-                }
+                page_content=question,  # 이 텍스트가 임베딩됩니다.
+                metadata=pg_metadata.model_dump()  # DTO를 딕셔너리로 변환하여 metadata에 저장
             )
         )
 
@@ -159,10 +152,10 @@ def ingest_qa_data():
         print(f"Also check if your PG_CONNECTION_STRING is correct and database/user permissions are set.")
 
     finally:
-        if mongo_client:
-            mongo_client.close()
-            print("[INFO] MongoDB client closed.")
-
+        pass
+        # if mongo_client:
+        #     mongo_client.close()
+        #     print("[INFO] MongoDB client closed.")
 
 
 if __name__ == "__main__":

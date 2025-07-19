@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.common.exception.CustomException import CustomException
-from app.config import init_db_connections
+
 from app.core.services.langchain_service import get_rag_chain, init_langchain_services
 from app.core.services.websocket_service import handle_websocket_connection
 from fastapi.exceptions import HTTPException as FastAPIHTTPException, RequestValidationError
@@ -33,13 +33,12 @@ async def lifespan(app: FastAPI):
     global rag_chain
     logger.info("Application startup event triggered.")
 
-    # 1. config.py의 데이터베이스 연결 초기화 (MongoDB 클라이언트 연결)
-    await init_db_connections()
+    # PGVector는 get_vectorstore 호출 시 초기화되므로 별도 초기화 함수는 필요 x
 
-    # 2. langchain_service.py의 LangChain 관련 서비스 초기화 (MongoDB 컬렉션 인스턴스, VectorStore)
+    # 1. langchain_service.py의 LangChain 관련 서비스 초기화 (MongoDB 컬렉션 인스턴스, VectorStore)
     await init_langchain_services()
 
-    # 3. 모든 리소스가 초기화된 후 RAG 체인 생성
+    # 2. 모든 리소스가 초기화된 후 RAG 체인 생성
     rag_chain = get_rag_chain()
 
     if rag_chain:

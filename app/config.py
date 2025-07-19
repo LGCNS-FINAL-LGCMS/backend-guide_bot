@@ -5,7 +5,6 @@ from langchain_aws import ChatBedrock, BedrockEmbeddings
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import PGVector
-from motor.motor_asyncio import AsyncIOMotorClient
 import logging
 
 # 로깅 설정
@@ -32,14 +31,14 @@ HF_EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 PG_CONNECTION_STRING = os.getenv("PG_CONNECTION_STRING")
 PG_COLLECTION_NAME = "guide_bot_embedded_q"
 
-# --- MongoDB 설정 ---
-MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
-MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
+# # --- MongoDB 설정 ---
+# MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
+# MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
+# MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 
-# MongoDB 클라이언트를 motor (비동기) 클라이언트로 변경
-_mongo_client = None  # 전역 변수로 클라이언트 캐싱
-_mongo_collection = None # 전역 변수로 컬렉션 캐싱
+# # MongoDB 클라이언트를 motor (비동기) 클라이언트로 변경
+# _mongo_client = None  # 전역 변수로 클라이언트 캐싱
+# _mongo_collection = None # 전역 변수로 컬렉션 캐싱
 
 def get_llm(use_bedrock: bool = False):
     """지정된 LLM 모델을 초기화하여 반환합니다."""
@@ -64,7 +63,7 @@ def get_llm(use_bedrock: bool = False):
             temperature=0.1,
             max_tokens=1000,
             streaming=True,
-            top_p=0.9,
+            top_p=0.6,
             api_key=OPENAI_API_KEY
         )
 
@@ -103,44 +102,44 @@ def get_vectorstore(embeddings_model):
         logger.error("Please ensure your PostgreSQL database is running, pgvector extension is enabled, and PG_CONNECTION_STRING is correct.")
         return None
 
-async def _initialize_mongo_connection():
-    """MongoDB 클라이언트와 컬렉션을 초기화하는 내부 비동기 함수"""
-    global _mongo_client, _mongo_collection
-    if not MONGO_CONNECTION_STRING or not MONGO_DB_NAME or not MONGO_COLLECTION_NAME:
-        logger.warning("MongoDB 환경 변수가 설정되지 않았습니다. MongoDB를 사용할 수 없습니다.")
+# async def _initialize_mongo_connection():
+#     """MongoDB 클라이언트와 컬렉션을 초기화하는 내부 비동기 함수"""
+#     global _mongo_client, _mongo_collection
+#     if not MONGO_CONNECTION_STRING or not MONGO_DB_NAME or not MONGO_COLLECTION_NAME:
+#         logger.warning("MongoDB 환경 변수가 설정되지 않았습니다. MongoDB를 사용할 수 없습니다.")
+#
+#         return None
+#
+#     if _mongo_client is None:
+#         try:
+#             _mongo_client = AsyncIOMotorClient(MONGO_CONNECTION_STRING)
+#             # 서버 상태를 확인하여 연결 테스트
+#             await _mongo_client.admin.command('ping')
+#             logger.info("Successfully connected to MongoDB.")
+#         except Exception as e:
+#             # 연결 실패 시 초기화
+#             logger.error(f"Could not connect to MongoDB: {e}")
+#             logger.error("Please ensure MongoDB is running and MONGO_CONNECTION_STRING/DB_NAME/COLLECTION_NAME in .env are correct.")
+#             _mongo_client = None
+#             _mongo_collection = None
+#             return None
+#
+#     if _mongo_collection is None and _mongo_client is not None:
+#         db = _mongo_client[MONGO_DB_NAME]
+#         _mongo_collection = db[MONGO_COLLECTION_NAME]
+#         logger.info(f"MongoDB collection '{MONGO_COLLECTION_NAME}' selected.")
+#     return _mongo_collection
+#
+# def get_mongo_collection():
+#     """초기화된 MongoDB 컬렉션 객체를 반환합니다. 초기화되지 않았다면 RuntimeError를 발생시킵니다."""
+#     if _mongo_collection is None:
+#         logger.error("MongoDB collection has not been initialized. Call init_db_connections() first.")
+#         raise RuntimeError("MongoDB collection not initialized.")
+#     return _mongo_collection
 
-        return None
-
-    if _mongo_client is None:
-        try:
-            _mongo_client = AsyncIOMotorClient(MONGO_CONNECTION_STRING)
-            # 서버 상태를 확인하여 연결 테스트
-            await _mongo_client.admin.command('ping')
-            logger.info("Successfully connected to MongoDB.")
-        except Exception as e:
-            # 연결 실패 시 초기화
-            logger.error(f"Could not connect to MongoDB: {e}")
-            logger.error("Please ensure MongoDB is running and MONGO_CONNECTION_STRING/DB_NAME/COLLECTION_NAME in .env are correct.")
-            _mongo_client = None
-            _mongo_collection = None
-            return None
-
-    if _mongo_collection is None and _mongo_client is not None:
-        db = _mongo_client[MONGO_DB_NAME]
-        _mongo_collection = db[MONGO_COLLECTION_NAME]
-        logger.info(f"MongoDB collection '{MONGO_COLLECTION_NAME}' selected.")
-    return _mongo_collection
-
-def get_mongo_collection():
-    """초기화된 MongoDB 컬렉션 객체를 반환합니다. 초기화되지 않았다면 RuntimeError를 발생시킵니다."""
-    if _mongo_collection is None:
-        logger.error("MongoDB collection has not been initialized. Call init_db_connections() first.")
-        raise RuntimeError("MongoDB collection not initialized.")
-    return _mongo_collection
-
-async def init_db_connections():
-    """애플리케이션 시작 시 모든 데이터베이스 연결을 초기화합니다."""
-    logger.info("Initializing database connections...")
-    await _initialize_mongo_connection() # MongoDB 연결 초기화
-    # PGVector는 get_vectorstore 호출 시 초기화되므로 별도 초기화 함수는 필요 x
-    logger.info("Database connections initialized.")
+# async def init_db_connections():
+#     """애플리케이션 시작 시 모든 데이터베이스 연결을 초기화합니다."""
+#     logger.info("Initializing database connections...")
+#     await _initialize_mongo_connection() # MongoDB 연결 초기화
+#     # PGVector는 get_vectorstore 호출 시 초기화되므로 별도 초기화 함수는 필요 x
+#     logger.info("Database connections initialized.")
